@@ -1,6 +1,52 @@
+"use client"
+
 import Link from "next/link"
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabase-client"
 
 export default function AreaStudentePage() {
+  const router = useRouter()
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function checkAuth() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        router.push("/login")
+        return
+      }
+
+      setLoading(false)
+    }
+
+    checkAuth()
+  }, [router])
+
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    router.push("/login")
+  }
+
+  if (loading) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          background: "#f8fbff",
+          color: "#0f172a",
+        }}
+      >
+        <div>Controllo accesso...</div>
+      </main>
+    )
+  }
+
   return (
     <main
       style={{
@@ -38,11 +84,19 @@ export default function AreaStudentePage() {
         </h1>
 
         <p style={{ color: "#475569", lineHeight: 1.7 }}>
-          Da qui puoi accedere al questionario di stage. In una fase successiva
-          questa pagina mostrerà anche lo stato della tua compilazione.
+          Da qui puoi accedere al questionario di stage. La tua compilazione
+          verrà collegata al tuo profilo, alla scuola e all’ente indicati in
+          fase di registrazione.
         </p>
 
-        <div style={{ marginTop: "24px", display: "flex", gap: "12px" }}>
+        <div
+          style={{
+            marginTop: "24px",
+            display: "flex",
+            gap: "12px",
+            flexWrap: "wrap",
+          }}
+        >
           <Link
             href="/questionario"
             style={{
@@ -58,21 +112,20 @@ export default function AreaStudentePage() {
             Compila questionario
           </Link>
 
-          <Link
-            href="/"
+          <button
+            onClick={handleLogout}
             style={{
-              display: "inline-block",
-              textDecoration: "none",
-              background: "#eff6ff",
-              color: "#1d4ed8",
+              border: "1px solid #fecaca",
+              background: "#fef2f2",
+              color: "#b91c1c",
               padding: "14px 20px",
               borderRadius: "14px",
               fontWeight: 800,
-              border: "1px solid #bfdbfe",
+              cursor: "pointer",
             }}
           >
-            Home
-          </Link>
+            Logout
+          </button>
         </div>
       </div>
     </main>

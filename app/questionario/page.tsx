@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import type { CSSProperties, FormEvent } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase-client"
@@ -111,6 +111,8 @@ const initialSchoolLife = Object.fromEntries(
 export default function QuestionarioPage() {
   const router = useRouter()
 
+  const [authChecking, setAuthChecking] = useState(true)
+
   const [educationPath, setEducationPath] = useState("")
   const [classGroup, setClassGroup] = useState("")
   const [firstExperience, setFirstExperience] = useState("")
@@ -144,6 +146,23 @@ export default function QuestionarioPage() {
   const [otherLearnedText, setOtherLearnedText] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+
+  useEffect(() => {
+    async function checkAuth() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        router.push("/login")
+        return
+      }
+
+      setAuthChecking(false)
+    }
+
+    checkAuth()
+  }, [router])
 
   function toggleValue(
     value: string,
@@ -220,6 +239,22 @@ export default function QuestionarioPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  if (authChecking) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          background: "#f8fbff",
+          color: "#0f172a",
+        }}
+      >
+        <div>Controllo accesso...</div>
+      </main>
+    )
   }
 
   return (
