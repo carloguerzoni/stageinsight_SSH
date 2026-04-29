@@ -165,23 +165,29 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-            <Link href="/" style={secondaryButton}>
-              Home
-            </Link>
+         <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+  	    <Link href="/" style={secondaryButton}>
+    Home
+  </Link>
 
-            <Link href="/dashboard/analisi" style={secondaryButton}>
-              Analisi
-            </Link>
+  <Link href="/dashboard/analisi" style={secondaryButton}>
+    Analisi
+  </Link>
 
-            <Link href="/questionario" style={secondaryButton}>
-              Questionario
-            </Link>
+  {currentUser.role === "ADMIN" ? (
+    <Link href="/admin/utenti" style={secondaryButton}>
+      Gestione utenti
+    </Link>
+  ) : null}
 
-            <button onClick={handleLogout} style={dangerButton}>
-              Logout
-            </button>
-          </div>
+  <Link href="/questionario" style={secondaryButton}>
+    Questionario
+  </Link>
+
+  <button onClick={handleLogout} style={dangerButton}>
+    Logout
+  </button>
+</div>
         </header>
 
         <section style={statsGrid}>
