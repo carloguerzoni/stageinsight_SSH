@@ -174,6 +174,10 @@ export default function DashboardPage() {
     Analisi
   </Link>
 
+<Link href="/dashboard/export" style={secondaryButton}>
+  Export CSV
+</Link>
+
   {currentUser.role === "ADMIN" ? (
     <Link href="/admin/utenti" style={secondaryButton}>
       Gestione utenti
