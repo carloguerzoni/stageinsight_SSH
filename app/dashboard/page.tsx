@@ -1,5 +1,22 @@
 import Link from "next/link"
 import { prisma } from "@/lib/prisma"
+import type { CSSProperties, ReactNode } from "react"
+
+const competenceQuestionLabels: Record<string, string> = {
+  Q_COMMITMENTS: "Rispetto impegni",
+  Q_TASK_COMPLETION: "Portare a termine incarichi",
+  Q_TEAMWORK: "Lavoro di gruppo",
+  Q_EMPATHY: "Empatia",
+  Q_LISTENING: "Ascolto",
+  Q_COMMUNICATION: "Comunicazione",
+  Q_UNEXPECTED_EVENTS: "Gestione imprevisti",
+  Q_ASK_FOR_HELP: "Chiedere aiuto",
+  Q_CURIOSITY_MOTIVATION: "Curiosità e motivazione",
+  Q_SKILLS_USEFUL: "Competenze utili",
+  Q_COMMUNICATION_GROWTH: "Crescita comunicativa",
+}
+
+const competenceQuestionCodes = Object.keys(competenceQuestionLabels)
 
 export default async function DashboardPage() {
   const [
@@ -8,11 +25,15 @@ export default async function DashboardPage() {
     totalMultiResponses,
     totalOpenResponses,
     recentSessions,
+    infoSourceGroups,
+    competenceAveragesRaw,
+    learnedSkillsGroups,
   ] = await Promise.all([
     prisma.surveySession.count(),
     prisma.closedResponse.count(),
     prisma.multiResponse.count(),
     prisma.openResponse.count(),
+
     prisma.surveySession.findMany({
       orderBy: {
         submittedAt: "desc",
@@ -29,7 +50,70 @@ export default async function DashboardPage() {
         },
       },
     }),
+
+    prisma.closedResponse.groupBy({
+      by: ["answerLabel"],
+      where: {
+        questionCode: "Q_INFO_SOURCE",
+      },
+      _count: {
+        _all: true,
+      },
+    }),
+
+    prisma.closedResponse.groupBy({
+      by: ["questionCode"],
+      where: {
+        questionCode: {
+          in: competenceQuestionCodes,
+        },
+        numericValue: {
+          not: null,
+        },
+      },
+      _avg: {
+        numericValue: true,
+      },
+    }),
+
+    prisma.multiResponse.groupBy({
+      by: ["answerLabel"],
+      where: {
+        questionCode: "Q_LEARNED_SKILLS",
+      },
+      _count: {
+        _all: true,
+      },
+    }),
   ])
+
+  const infoSourceData = infoSourceGroups
+    .map((item) => ({
+      label: item.answerLabel,
+      value: item._count._all,
+    }))
+    .sort((a, b) => b.value - a.value)
+
+  const competenceAverages = competenceQuestionCodes
+    .map((code) => {
+      const found = competenceAveragesRaw.find(
+        (item) => item.questionCode === code
+      )
+
+      return {
+        label: competenceQuestionLabels[code],
+        value: Number((found?._avg.numericValue ?? 0).toFixed(2)),
+      }
+    })
+    .filter((item) => item.value > 0)
+    .sort((a, b) => b.value - a.value)
+
+  const learnedSkillsData = learnedSkillsGroups
+    .map((item) => ({
+      label: item.answerLabel,
+      value: item._count._all,
+    }))
+    .sort((a, b) => b.value - a.value)
 
   return (
     <main
@@ -40,7 +124,7 @@ export default async function DashboardPage() {
         padding: "32px 16px 56px",
       }}
     >
-      <div style={{ maxWidth: "1120px", margin: "0 auto" }}>
+      <div style={{ maxWidth: "1180px", margin: "0 auto" }}>
         <header
           style={{
             display: "flex",
@@ -81,6 +165,11 @@ export default async function DashboardPage() {
             <Link href="/" style={secondaryButton}>
               Home
             </Link>
+
+            <Link href="/dashboard/analisi" style={secondaryButton}>
+              Analisi
+            </Link>
+
             <Link href="/questionario" style={primaryButton}>
               Vai al questionario
             </Link>
@@ -100,21 +189,67 @@ export default async function DashboardPage() {
             value={totalSessions}
             description="Numero totale di questionari inviati"
           />
+
           <StatCard
             title="Risposte chiuse"
             value={totalClosedResponses}
             description="Domande a scelta singola / scala Likert"
           />
+
           <StatCard
             title="Risposte multiple"
             value={totalMultiResponses}
             description="Motivazioni, competenze e contesti"
           />
+
           <StatCard
             title="Risposte aperte"
             value={totalOpenResponses}
             description="Testi liberi inseriti dagli studenti"
           />
+        </section>
+
+        <section
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+            gap: "20px",
+            marginBottom: "28px",
+          }}
+        >
+          <ChartCard
+            title="Fonte informativa principale"
+            subtitle="Quante volte è stata selezionata ogni fonte"
+          >
+            <SimpleBarChart
+              data={infoSourceData}
+              emptyMessage="Nessun dato disponibile per la fonte informativa."
+              maxValue={Math.max(...infoSourceData.map((d) => d.value), 1)}
+            />
+          </ChartCard>
+
+          <ChartCard
+            title="Competenze medie percepite"
+            subtitle="Media delle risposte Likert da 1 a 4"
+          >
+            <SimpleBarChart
+              data={competenceAverages}
+              emptyMessage="Nessun dato disponibile sulle competenze."
+              maxValue={4}
+              valueFormatter={(value) => value.toFixed(2)}
+            />
+          </ChartCard>
+
+          <ChartCard
+            title="Competenze apprese più selezionate"
+            subtitle="Selezioni multiple degli apprendimenti percepiti"
+          >
+            <SimpleBarChart
+              data={learnedSkillsData}
+              emptyMessage="Nessun dato disponibile sulle competenze apprese."
+              maxValue={Math.max(...learnedSkillsData.map((d) => d.value), 1)}
+            />
+          </ChartCard>
         </section>
 
         <section
@@ -141,6 +276,7 @@ export default async function DashboardPage() {
             >
               Ultime compilazioni
             </h2>
+
             <p
               style={{
                 margin: "8px 0 0",
@@ -162,7 +298,7 @@ export default async function DashboardPage() {
                 style={{
                   width: "100%",
                   borderCollapse: "collapse",
-                  minWidth: "900px",
+                  minWidth: "980px",
                 }}
               >
                 <thead>
@@ -182,13 +318,22 @@ export default async function DashboardPage() {
 
                 <tbody>
                   {recentSessions.map((session) => (
-                    <tr key={session.id} style={{ borderTop: "1px solid #e2e8f0" }}>
+                    <tr
+                      key={session.id}
+                      style={{ borderTop: "1px solid #e2e8f0" }}
+                    >
                       <TableCell mono>{session.id.slice(0, 8)}...</TableCell>
+
                       <TableCell>{formatDate(session.submittedAt)}</TableCell>
+
                       <TableCell>
                         {session.studentProfile?.educationPath || "—"}
                       </TableCell>
-                      <TableCell>{session.studentProfile?.classGroup || "—"}</TableCell>
+
+                      <TableCell>
+                        {session.studentProfile?.classGroup || "—"}
+                      </TableCell>
+
                       <TableCell>
                         {session.studentProfile?.firstExperience === true
                           ? "Sì"
@@ -196,12 +341,19 @@ export default async function DashboardPage() {
                           ? "No"
                           : "—"}
                       </TableCell>
+
                       <TableCell>
                         {session.studentProfile?.informationSource || "—"}
                       </TableCell>
-                      <TableCell>{session.studentProfile?.stageRole || "—"}</TableCell>
+
+                      <TableCell>
+                        {session.studentProfile?.stageRole || "—"}
+                      </TableCell>
+
                       <TableCell>{session._count.closedResponses}</TableCell>
+
                       <TableCell>{session._count.multiResponses}</TableCell>
+
                       <TableCell>{session._count.openResponses}</TableCell>
                     </tr>
                   ))}
@@ -270,7 +422,128 @@ function StatCard({
   )
 }
 
-function TableHead({ children }: { children: React.ReactNode }) {
+function ChartCard({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string
+  subtitle: string
+  children: ReactNode
+}) {
+  return (
+    <section
+      style={{
+        background: "#ffffff",
+        borderRadius: "24px",
+        border: "1px solid #e2e8f0",
+        boxShadow: "0 14px 40px rgba(15, 23, 42, 0.05)",
+        padding: "22px",
+      }}
+    >
+      <h2
+        style={{
+          margin: "0 0 6px",
+          fontSize: "1.15rem",
+          color: "#0f172a",
+        }}
+      >
+        {title}
+      </h2>
+
+      <p
+        style={{
+          margin: "0 0 18px",
+          color: "#64748b",
+          lineHeight: 1.6,
+          fontSize: "0.95rem",
+        }}
+      >
+        {subtitle}
+      </p>
+
+      {children}
+    </section>
+  )
+}
+
+function SimpleBarChart({
+  data,
+  maxValue,
+  emptyMessage,
+  valueFormatter,
+}: {
+  data: { label: string; value: number }[]
+  maxValue: number
+  emptyMessage: string
+  valueFormatter?: (value: number) => string
+}) {
+  if (data.length === 0) {
+    return <p style={{ margin: 0, color: "#475569" }}>{emptyMessage}</p>
+  }
+
+  return (
+    <div style={{ display: "grid", gap: "14px" }}>
+      {data.map((item) => {
+        const width = `${Math.max((item.value / maxValue) * 100, 4)}%`
+
+        return (
+          <div key={item.label}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "12px",
+                marginBottom: "6px",
+              }}
+            >
+              <span
+                style={{
+                  color: "#0f172a",
+                  fontSize: "0.95rem",
+                  lineHeight: 1.4,
+                }}
+              >
+                {item.label}
+              </span>
+
+              <strong
+                style={{
+                  color: "#1d4ed8",
+                  whiteSpace: "nowrap",
+                  fontSize: "0.95rem",
+                }}
+              >
+                {valueFormatter ? valueFormatter(item.value) : item.value}
+              </strong>
+            </div>
+
+            <div
+              style={{
+                width: "100%",
+                height: "12px",
+                borderRadius: "999px",
+                background: "#e2e8f0",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width,
+                  height: "100%",
+                  borderRadius: "999px",
+                  background: "linear-gradient(90deg, #2563eb, #60a5fa)",
+                }}
+              />
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function TableHead({ children }: { children: ReactNode }) {
   return (
     <th
       style={{
@@ -290,7 +563,7 @@ function TableCell({
   children,
   mono = false,
 }: {
-  children: React.ReactNode
+  children: ReactNode
   mono?: boolean
 }) {
   return (
@@ -315,7 +588,7 @@ function formatDate(date: Date) {
   }).format(date)
 }
 
-const primaryButton: React.CSSProperties = {
+const primaryButton: CSSProperties = {
   display: "inline-block",
   textDecoration: "none",
   background: "#1d4ed8",
@@ -326,7 +599,7 @@ const primaryButton: React.CSSProperties = {
   boxShadow: "0 12px 30px rgba(29, 78, 216, 0.22)",
 }
 
-const secondaryButton: React.CSSProperties = {
+const secondaryButton: CSSProperties = {
   display: "inline-block",
   textDecoration: "none",
   background: "#eff6ff",
