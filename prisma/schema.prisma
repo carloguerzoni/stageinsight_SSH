@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Ets {
+  id             String          @id @default(uuid())
+  name           String
+  code           String?         @unique
+  city           String?
+  createdAt      DateTime        @default(now())
+  surveySessions SurveySession[]
+}
+
+model SurveySession {
+  id              String           @id @default(uuid())
+  etsId           String?
+  schoolYear      String?
+  submittedAt     DateTime         @default(now())
+  ets             Ets?             @relation(fields: [etsId], references: [id])
+  studentProfile  StudentProfile?
+  closedResponses ClosedResponse[]
+  openResponses   OpenResponse[]
+  multiResponses  MultiResponse[]
+}
+
+model StudentProfile {
+  id                String        @id @default(uuid())
+  surveySessionId   String        @unique
+  educationPath     String
+  classGroup        String?
+  firstExperience   Boolean?
+  stageRole         String?
+  informationSource String?
+  surveySession     SurveySession @relation(fields: [surveySessionId], references: [id], onDelete: Cascade)
+}
+
+model ClosedResponse {
+  id              String        @id @default(uuid())
+  surveySessionId String
+  questionCode    String
+  answerLabel     String
+  numericValue    Int?
+  surveySession   SurveySession @relation(fields: [surveySessionId], references: [id], onDelete: Cascade)
+
+  @@unique([surveySessionId, questionCode])
+}
+
+model OpenResponse {
+  id              String        @id @default(uuid())
+  surveySessionId String
+  questionCode    String
+  answerText      String
+  surveySession   SurveySession @relation(fields: [surveySessionId], references: [id], onDelete: Cascade)
+
+  @@unique([surveySessionId, questionCode])
+}
+
+model MultiResponse {
+  id              String        @id @default(uuid())
+  surveySessionId String
+  questionCode    String
+  answerLabel     String
+  surveySession   SurveySession @relation(fields: [surveySessionId], references: [id], onDelete: Cascade)
+
+  @@unique([surveySessionId, questionCode, answerLabel])
+}
