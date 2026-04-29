@@ -1,194 +1,125 @@
+"use client"
+
 import Link from "next/link"
-import { prisma } from "@/lib/prisma"
+import { useEffect, useState } from "react"
 import type { CSSProperties, ReactNode } from "react"
+import { useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabase-client"
 
-const competenceLabels: Record<string, string> = {
-  Q_COMMITMENTS: "Rispetto impegni",
-  Q_TASK_COMPLETION: "Portare a termine incarichi",
-  Q_TEAMWORK: "Lavoro di gruppo",
-  Q_EMPATHY: "Empatia",
-  Q_LISTENING: "Ascolto",
-  Q_COMMUNICATION: "Comunicazione",
-  Q_UNEXPECTED_EVENTS: "Gestione imprevisti",
-  Q_ASK_FOR_HELP: "Chiedere aiuto",
-  Q_CURIOSITY_MOTIVATION: "Curiosità e motivazione",
-  Q_SKILLS_USEFUL: "Competenze utili",
-  Q_COMMUNICATION_GROWTH: "Crescita comunicativa",
+type ChartItem = {
+  label: string
+  value: number
 }
 
-const volunteeringInterestLabels: Record<string, string> = {
-  Q_VOL_INTEREST_NEW_PEOPLE: "Conoscere nuove persone/realtà",
-  Q_VOL_INTEREST_MANUAL_ACTIVITIES: "Attività manuali",
-  Q_VOL_INTEREST_NEW_INTERESTS: "Scoprire nuovi interessi",
-  Q_VOL_INTEREST_NEW_CAPABILITIES: "Scoprire nuove capacità",
-  Q_VOL_INTEREST_ACTIVITY_OF_INTEREST: "Attività di interesse",
-  Q_VOL_INTEREST_TEAMWORK: "Lavorare in gruppo",
+type AnalysisData = {
+  success: boolean
+  currentUser: {
+    fullName: string
+    email: string
+    role: string
+    school: string | null
+    ets: string | null
+  }
+  insights: string[]
+  charts: {
+    pathGroups: ChartItem[]
+    firstExperienceGroups: ChartItem[]
+    infoSourceGroups: ChartItem[]
+    motivationGroups: ChartItem[]
+    competenceAverages: ChartItem[]
+    learnedSkillsGroups: ChartItem[]
+    skillContextGroups: ChartItem[]
+    volunteeringAverages: ChartItem[]
+    schoolLifeAverages: ChartItem[]
+  }
 }
 
-const schoolLifeLabels: Record<string, string> = {
-  Q_CLASS_WELLBEING: "Benessere in classe",
-  Q_SCHOOL_RULES: "Importanza regole scolastiche",
-  Q_PEER_GROUP: "Gruppo amici/compagni",
-  Q_GRADES_SATISFACTION: "Soddisfazione voti",
-  Q_CLASS_RELATIONS: "Relazioni e gruppo classe",
-  Q_SELF_AWARENESS: "Conoscenza bisogni/desideri",
-  Q_FAMILY_SUPPORT: "Supporto famiglia",
-}
+export default function AnalisiPage() {
+  const router = useRouter()
 
-export default async function AnalisiPage() {
-  const [
-    totalSessions,
-    pathGroupsRaw,
-    firstExperienceGroupsRaw,
-    infoSourceGroupsRaw,
-    motivationGroupsRaw,
-    competenceAveragesRaw,
-    learnedSkillsGroupsRaw,
-    skillContextGroupsRaw,
-    volunteeringAveragesRaw,
-    schoolLifeAveragesRaw,
-  ] = await Promise.all([
-    prisma.surveySession.count(),
+  const [data, setData] = useState<AnalysisData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
 
-    prisma.studentProfile.groupBy({
-      by: ["educationPath"],
-      _count: { _all: true },
-    }),
+  useEffect(() => {
+    async function loadAnalysis() {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
 
-    prisma.studentProfile.groupBy({
-      by: ["firstExperience"],
-      _count: { _all: true },
-    }),
+        if (!session?.access_token) {
+          router.push("/login")
+          return
+        }
 
-    prisma.closedResponse.groupBy({
-      by: ["answerLabel"],
-      where: { questionCode: "Q_INFO_SOURCE" },
-      _count: { _all: true },
-    }),
+        const response = await fetch("/api/dashboard/analysis", {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        })
 
-    prisma.multiResponse.groupBy({
-      by: ["answerLabel"],
-      where: { questionCode: "Q_PERSONAL_MOTIVATIONS" },
-      _count: { _all: true },
-    }),
+        const result = await response.json()
 
-    prisma.closedResponse.groupBy({
-      by: ["questionCode"],
-      where: {
-        questionCode: { in: Object.keys(competenceLabels) },
-        numericValue: { not: null },
-      },
-      _avg: { numericValue: true },
-    }),
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || "Accesso negato")
+        }
 
-    prisma.multiResponse.groupBy({
-      by: ["answerLabel"],
-      where: { questionCode: "Q_LEARNED_SKILLS" },
-      _count: { _all: true },
-    }),
+        setData(result)
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Errore durante il caricamento dell’analisi."
+        )
+      } finally {
+        setLoading(false)
+      }
+    }
 
-    prisma.multiResponse.groupBy({
-      by: ["answerLabel"],
-      where: { questionCode: "Q_SKILL_CONTEXTS" },
-      _count: { _all: true },
-    }),
+    loadAnalysis()
+  }, [router])
 
-    prisma.closedResponse.groupBy({
-      by: ["questionCode"],
-      where: {
-        questionCode: { in: Object.keys(volunteeringInterestLabels) },
-        numericValue: { not: null },
-      },
-      _avg: { numericValue: true },
-    }),
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    router.push("/login")
+  }
 
-    prisma.closedResponse.groupBy({
-      by: ["questionCode"],
-      where: {
-        questionCode: { in: Object.keys(schoolLifeLabels) },
-        numericValue: { not: null },
-      },
-      _avg: { numericValue: true },
-    }),
-  ])
+  if (loading) {
+    return (
+      <main style={pageStyle}>
+        <div style={centerCard}>
+          <h1 style={{ margin: 0 }}>Caricamento analisi...</h1>
+          <p style={{ color: "#64748b" }}>Controllo dell’accesso in corso.</p>
+        </div>
+      </main>
+    )
+  }
 
-  const pathGroups = sortDesc(
-    pathGroupsRaw.map((item) => ({
-      label: item.educationPath || "Non indicato",
-      value: item._count._all,
-    }))
-  )
+  if (error || !data) {
+    return (
+      <main style={pageStyle}>
+        <div style={centerCard}>
+          <p style={eyebrow}>StageInsight · Accesso negato</p>
+          <h1 style={{ margin: "8px 0", color: "#0f172a" }}>
+            Non puoi accedere all’analisi
+          </h1>
+          <p style={{ color: "#b91c1c", lineHeight: 1.6 }}>{error}</p>
 
-  const firstExperienceGroups = sortDesc(
-    firstExperienceGroupsRaw.map((item) => ({
-      label:
-        item.firstExperience === true
-          ? "Prima esperienza"
-          : item.firstExperience === false
-          ? "Esperienza precedente"
-          : "Non indicato",
-      value: item._count._all,
-    }))
-  )
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+            <Link href="/login" style={primaryButton}>
+              Vai al login
+            </Link>
+            <Link href="/" style={secondaryButton}>
+              Home
+            </Link>
+          </div>
+        </div>
+      </main>
+    )
+  }
 
-  const infoSourceGroups = sortDesc(
-    infoSourceGroupsRaw.map((item) => ({
-      label: item.answerLabel,
-      value: item._count._all,
-    }))
-  )
-
-  const motivationGroups = sortDesc(
-    motivationGroupsRaw.map((item) => ({
-      label: item.answerLabel,
-      value: item._count._all,
-    }))
-  )
-
-  const learnedSkillsGroups = sortDesc(
-    learnedSkillsGroupsRaw.map((item) => ({
-      label: item.answerLabel,
-      value: item._count._all,
-    }))
-  )
-
-  const skillContextGroups = sortDesc(
-    skillContextGroupsRaw.map((item) => ({
-      label: item.answerLabel,
-      value: item._count._all,
-    }))
-  )
-
-  const competenceAverages = sortDesc(
-    competenceAveragesRaw.map((item) => ({
-      label: competenceLabels[item.questionCode] || item.questionCode,
-      value: Number((item._avg.numericValue ?? 0).toFixed(2)),
-    }))
-  )
-
-  const volunteeringAverages = sortDesc(
-    volunteeringAveragesRaw.map((item) => ({
-      label: volunteeringInterestLabels[item.questionCode] || item.questionCode,
-      value: Number((item._avg.numericValue ?? 0).toFixed(2)),
-    }))
-  )
-
-  const schoolLifeAverages = sortDesc(
-    schoolLifeAveragesRaw.map((item) => ({
-      label: schoolLifeLabels[item.questionCode] || item.questionCode,
-      value: Number((item._avg.numericValue ?? 0).toFixed(2)),
-    }))
-  )
-
-  const insights = buildInsights({
-    totalSessions,
-    infoSourceGroups,
-    motivationGroups,
-    competenceAverages,
-    learnedSkillsGroups,
-    skillContextGroups,
-    schoolLifeAverages,
-  })
+  const { currentUser, insights, charts } = data
 
   return (
     <main style={pageStyle}>
@@ -198,8 +129,14 @@ export default async function AnalisiPage() {
             <p style={eyebrow}>StageInsight · Analisi multi-dimensionale</p>
             <h1 style={titleStyle}>Lettura dei dati raccolti</h1>
             <p style={subtitleStyle}>
-              Questa pagina legge i dati da più punti di vista: profilo,
-              motivazioni, competenze, contesti futuri e percezione scolastica.
+              Accesso effettuato come <strong>{currentUser.fullName}</strong> —{" "}
+              ruolo: <strong>{currentUser.role}</strong>
+              {currentUser.school ? (
+                <>
+                  {" "}
+                  — scuola: <strong>{currentUser.school}</strong>
+                </>
+              ) : null}
             </p>
           </div>
 
@@ -207,9 +144,14 @@ export default async function AnalisiPage() {
             <Link href="/dashboard" style={secondaryButton}>
               Dashboard
             </Link>
-            <Link href="/questionario" style={primaryButton}>
+
+            <Link href="/questionario" style={secondaryButton}>
               Questionario
             </Link>
+
+            <button onClick={handleLogout} style={dangerButton}>
+              Logout
+            </button>
           </div>
         </header>
 
@@ -235,8 +177,8 @@ export default async function AnalisiPage() {
             subtitle="Quanti studenti appartengono a ogni percorso di studi"
           >
             <SimpleBarChart
-              data={pathGroups}
-              maxValue={maxOf(pathGroups)}
+              data={charts.pathGroups}
+              maxValue={maxOf(charts.pathGroups)}
               emptyMessage="Nessun percorso disponibile."
             />
           </ChartCard>
@@ -246,8 +188,8 @@ export default async function AnalisiPage() {
             subtitle="Confronto tra studenti alla prima esperienza e non"
           >
             <SimpleBarChart
-              data={firstExperienceGroups}
-              maxValue={maxOf(firstExperienceGroups)}
+              data={charts.firstExperienceGroups}
+              maxValue={maxOf(charts.firstExperienceGroups)}
               emptyMessage="Nessun dato disponibile."
             />
           </ChartCard>
@@ -257,8 +199,8 @@ export default async function AnalisiPage() {
             subtitle="Da dove gli studenti hanno ricevuto informazioni"
           >
             <SimpleBarChart
-              data={infoSourceGroups}
-              maxValue={maxOf(infoSourceGroups)}
+              data={charts.infoSourceGroups}
+              maxValue={maxOf(charts.infoSourceGroups)}
               emptyMessage="Nessuna fonte informativa disponibile."
             />
           </ChartCard>
@@ -268,8 +210,8 @@ export default async function AnalisiPage() {
             subtitle="Motivi principali che hanno spinto gli studenti a partecipare"
           >
             <SimpleBarChart
-              data={motivationGroups}
-              maxValue={maxOf(motivationGroups)}
+              data={charts.motivationGroups}
+              maxValue={maxOf(charts.motivationGroups)}
               emptyMessage="Nessuna motivazione disponibile."
             />
           </ChartCard>
@@ -279,7 +221,7 @@ export default async function AnalisiPage() {
             subtitle="Media delle risposte su scala 1-4"
           >
             <SimpleBarChart
-              data={competenceAverages}
+              data={charts.competenceAverages}
               maxValue={4}
               emptyMessage="Nessun dato sulle competenze."
               valueFormatter={(value) => value.toFixed(2)}
@@ -291,8 +233,8 @@ export default async function AnalisiPage() {
             subtitle="Competenze selezionate più spesso dagli studenti"
           >
             <SimpleBarChart
-              data={learnedSkillsGroups}
-              maxValue={maxOf(learnedSkillsGroups)}
+              data={charts.learnedSkillsGroups}
+              maxValue={maxOf(charts.learnedSkillsGroups)}
               emptyMessage="Nessuna competenza selezionata."
             />
           </ChartCard>
@@ -302,8 +244,8 @@ export default async function AnalisiPage() {
             subtitle="Dove gli studenti pensano di usare le competenze sviluppate"
           >
             <SimpleBarChart
-              data={skillContextGroups}
-              maxValue={maxOf(skillContextGroups)}
+              data={charts.skillContextGroups}
+              maxValue={maxOf(charts.skillContextGroups)}
               emptyMessage="Nessun contesto futuro disponibile."
             />
           </ChartCard>
@@ -313,7 +255,7 @@ export default async function AnalisiPage() {
             subtitle="Media delle risposte su scala 1-4"
           >
             <SimpleBarChart
-              data={volunteeringAverages}
+              data={charts.volunteeringAverages}
               maxValue={4}
               emptyMessage="Nessun dato sugli interessi del volontariato."
               valueFormatter={(value) => value.toFixed(2)}
@@ -327,7 +269,7 @@ export default async function AnalisiPage() {
             subtitle="Media delle risposte su benessere, relazioni, scuola e famiglia"
           >
             <SimpleBarChart
-              data={schoolLifeAverages}
+              data={charts.schoolLifeAverages}
               maxValue={4}
               emptyMessage="Nessun dato sulla vita scolastica/personale."
               valueFormatter={(value) => value.toFixed(2)}
@@ -337,99 +279,6 @@ export default async function AnalisiPage() {
       </div>
     </main>
   )
-}
-
-function buildInsights({
-  totalSessions,
-  infoSourceGroups,
-  motivationGroups,
-  competenceAverages,
-  learnedSkillsGroups,
-  skillContextGroups,
-  schoolLifeAverages,
-}: {
-  totalSessions: number
-  infoSourceGroups: ChartItem[]
-  motivationGroups: ChartItem[]
-  competenceAverages: ChartItem[]
-  learnedSkillsGroups: ChartItem[]
-  skillContextGroups: ChartItem[]
-  schoolLifeAverages: ChartItem[]
-}) {
-  if (totalSessions === 0) return []
-
-  const topSource = infoSourceGroups[0]
-  const topMotivation = motivationGroups[0]
-  const topCompetence = competenceAverages[0]
-  const weakestCompetence = [...competenceAverages].sort(
-    (a, b) => a.value - b.value
-  )[0]
-  const topLearnedSkill = learnedSkillsGroups[0]
-  const topContext = skillContextGroups[0]
-  const topSchoolLife = schoolLifeAverages[0]
-
-  const insights: string[] = []
-
-  insights.push(
-    `Sono presenti ${totalSessions} compilazioni totali nel database.`
-  )
-
-  if (topSource) {
-    insights.push(
-      `La fonte informativa più frequente è "${topSource.label}", selezionata ${topSource.value} volte.`
-    )
-  }
-
-  if (topMotivation) {
-    insights.push(
-      `La motivazione personale più ricorrente è "${topMotivation.label}".`
-    )
-  }
-
-  if (topCompetence) {
-    insights.push(
-      `La competenza/area con media più alta è "${topCompetence.label}" con valore medio ${topCompetence.value.toFixed(
-        2
-      )} su 4.`
-    )
-  }
-
-  if (weakestCompetence) {
-    insights.push(
-      `L’area con media più bassa, quindi potenzialmente da osservare meglio, è "${weakestCompetence.label}" con valore medio ${weakestCompetence.value.toFixed(
-        2
-      )} su 4.`
-    )
-  }
-
-  if (topLearnedSkill) {
-    insights.push(
-      `La competenza appresa più selezionata è "${topLearnedSkill.label}".`
-    )
-  }
-
-  if (topContext) {
-    insights.push(
-      `Il contesto futuro più indicato per spendere le competenze è "${topContext.label}".`
-    )
-  }
-
-  if (topSchoolLife) {
-    insights.push(
-      `Nella parte scolastica/personale, l’aspetto con media più alta è "${topSchoolLife.label}".`
-    )
-  }
-
-  return insights
-}
-
-type ChartItem = {
-  label: string
-  value: number
-}
-
-function sortDesc(data: ChartItem[]) {
-  return [...data].sort((a, b) => b.value - a.value)
 }
 
 function maxOf(data: ChartItem[]) {
@@ -480,6 +329,7 @@ function SimpleBarChart({
               <span style={{ color: "#0f172a", lineHeight: 1.4 }}>
                 {item.label}
               </span>
+
               <strong style={{ color: "#1d4ed8", whiteSpace: "nowrap" }}>
                 {valueFormatter ? valueFormatter(item.value) : item.value}
               </strong>
@@ -499,6 +349,16 @@ const pageStyle: CSSProperties = {
   minHeight: "100vh",
   background: "linear-gradient(180deg, #f8fbff 0%, #eef4ff 50%, #f8fafc 100%)",
   padding: "32px 16px 56px",
+}
+
+const centerCard: CSSProperties = {
+  maxWidth: "620px",
+  margin: "80px auto",
+  background: "#ffffff",
+  borderRadius: "24px",
+  border: "1px solid #e2e8f0",
+  boxShadow: "0 14px 40px rgba(15, 23, 42, 0.05)",
+  padding: "28px",
 }
 
 const headerStyle: CSSProperties = {
@@ -608,4 +468,14 @@ const secondaryButton: CSSProperties = {
   borderRadius: "14px",
   fontWeight: 700,
   border: "1px solid #bfdbfe",
+}
+
+const dangerButton: CSSProperties = {
+  border: "1px solid #fecaca",
+  background: "#fef2f2",
+  color: "#b91c1c",
+  padding: "13px 18px",
+  borderRadius: "14px",
+  fontWeight: 700,
+  cursor: "pointer",
 }
