@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
 import { prisma } from "@/lib/prisma"
+
+const supabaseServer = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
+)
 
 const likertOptions = [
   "Moltissimo",
@@ -55,6 +61,64 @@ function hasAllLikertValues(
 
 export async function POST(request: Request) {
   try {
+    const authHeader = request.headers.get("authorization")
+    const token = authHeader?.replace("Bearer ", "")
+
+    if (!token) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Devi effettuare il login prima di compilare il questionario.",
+        },
+        { status: 401 }
+      )
+    }
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabaseServer.auth.getUser(token)
+
+    if (authError || !user) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Sessione non valida. Effettua di nuovo il login.",
+        },
+        { status: 401 }
+      )
+    }
+
+    const appUser = await prisma.appUser.findUnique({
+      where: {
+        authUserId: user.id,
+      },
+      include: {
+        school: true,
+        ets: true,
+      },
+    })
+
+    if (!appUser) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Profilo studente non trovato.",
+        },
+        { status: 404 }
+      )
+    }
+
+    if (appUser.role !== "STUDENT") {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Solo gli studenti possono compilare il questionario.",
+        },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
 
     const {
@@ -121,6 +185,8 @@ export async function POST(request: Request) {
       const session = await tx.surveySession.create({
         data: {
           schoolYear: "2025/2026",
+          appUserId: appUser.id,
+          etsId: appUser.etsId,
         },
       })
 

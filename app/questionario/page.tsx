@@ -1,7 +1,9 @@
 "use client"
 
 import { useState } from "react"
+import type { CSSProperties, FormEvent } from "react"
 import { useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabase-client"
 
 const likertOptions = [
   "Moltissimo",
@@ -115,6 +117,7 @@ export default function QuestionarioPage() {
   const [informationSource, setInformationSource] = useState("")
   const [stageRole, setStageRole] = useState("")
   const [motivations, setMotivations] = useState<string[]>([])
+
   const [commitments, setCommitments] = useState("")
   const [taskCompletion, setTaskCompletion] = useState("")
   const [teamwork, setTeamwork] = useState("")
@@ -126,14 +129,18 @@ export default function QuestionarioPage() {
   const [curiosityMotivation, setCuriosityMotivation] = useState("")
   const [skillsUseful, setSkillsUseful] = useState("")
   const [communicationGrowth, setCommunicationGrowth] = useState("")
+
   const [learnedSkills, setLearnedSkills] = useState<string[]>([])
   const [skillContexts, setSkillContexts] = useState<string[]>([])
+
   const [volunteeringInterests, setVolunteeringInterests] = useState<
     Record<string, string>
   >(initialVolunteeringInterests)
+
   const [schoolLife, setSchoolLife] = useState<Record<string, string>>(
     initialSchoolLife
   )
+
   const [otherLearnedText, setOtherLearnedText] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -150,16 +157,26 @@ export default function QuestionarioPage() {
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError("")
 
     try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+
+      if (!session?.access_token) {
+        router.push("/login")
+        return
+      }
+
       const response = await fetch("/api/questionario", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           educationPath,
@@ -254,14 +271,17 @@ export default function QuestionarioPage() {
                 lineHeight: 1.6,
               }}
             >
-              In questa versione sono state inserite le domande principali
-              richieste dalla traccia. Le domande con più opzioni possono essere
-              selezionate in modo multiplo.
+              Compila il questionario relativo alla tua esperienza di stage. Le
+              risposte saranno collegate al tuo profilo studente, alla tua
+              scuola e all’ente indicato in fase di registrazione.
             </p>
           </div>
 
           <div style={{ padding: "32px" }}>
-            <form onSubmit={handleSubmit} style={{ display: "grid", gap: "28px" }}>
+            <form
+              onSubmit={handleSubmit}
+              style={{ display: "grid", gap: "28px" }}
+            >
               <section>
                 <h2 style={sectionTitle}>1. Profilo studente</h2>
 
@@ -324,7 +344,9 @@ export default function QuestionarioPage() {
                       <option value="Dall'informagiovani">
                         Dall'informagiovani
                       </option>
-                      <option value="Dai centri giovani">Dai centri giovani</option>
+                      <option value="Dai centri giovani">
+                        Dai centri giovani
+                      </option>
                       <option value="Dal CSV Terre Estensi">
                         Dal CSV Terre Estensi
                       </option>
@@ -332,7 +354,9 @@ export default function QuestionarioPage() {
                         Materiale promozionale
                       </option>
                       <option value="Servizi sociali">Servizi sociali</option>
-                      <option value="Dalla mia famiglia">Dalla mia famiglia</option>
+                      <option value="Dalla mia famiglia">
+                        Dalla mia famiglia
+                      </option>
                       <option value="Da un amico">Da un amico</option>
                     </select>
                   </div>
@@ -363,7 +387,9 @@ export default function QuestionarioPage() {
                 <CheckboxGroup
                   options={motivationOptions}
                   values={motivations}
-                  onToggle={(value) => toggleValue(value, motivations, setMotivations)}
+                  onToggle={(value) =>
+                    toggleValue(value, motivations, setMotivations)
+                  }
                 />
               </section>
 
@@ -495,9 +521,7 @@ export default function QuestionarioPage() {
               </section>
 
               <section>
-                <h2 style={sectionTitle}>
-                  7. Vita scolastica e personale
-                </h2>
+                <h2 style={sectionTitle}>7. Vita scolastica e personale</h2>
                 <p style={helperText}>
                   Rispondi alle seguenti domande usando la stessa scala.
                 </p>
@@ -671,19 +695,19 @@ function CheckboxGroup({
   )
 }
 
-const sectionTitle: React.CSSProperties = {
+const sectionTitle: CSSProperties = {
   fontSize: "1.15rem",
   margin: "0 0 14px",
   color: "#0f172a",
 }
 
-const helperText: React.CSSProperties = {
+const helperText: CSSProperties = {
   margin: "0 0 12px",
   color: "#64748b",
   lineHeight: 1.6,
 }
 
-const labelStyle: React.CSSProperties = {
+const labelStyle: CSSProperties = {
   display: "block",
   fontWeight: 600,
   marginBottom: "8px",
@@ -691,13 +715,13 @@ const labelStyle: React.CSSProperties = {
   lineHeight: 1.45,
 }
 
-const gridStyle: React.CSSProperties = {
+const gridStyle: CSSProperties = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
   gap: "18px",
 }
 
-const inputStyle: React.CSSProperties = {
+const inputStyle: CSSProperties = {
   width: "100%",
   padding: "12px 14px",
   borderRadius: "14px",
@@ -709,7 +733,7 @@ const inputStyle: React.CSSProperties = {
   boxSizing: "border-box",
 }
 
-const textareaStyle: React.CSSProperties = {
+const textareaStyle: CSSProperties = {
   ...inputStyle,
   resize: "vertical",
   minHeight: "120px",

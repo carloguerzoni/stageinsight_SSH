@@ -13,15 +13,21 @@ model Ets {
   code           String?         @unique
   city           String?
   createdAt      DateTime        @default(now())
+
   surveySessions SurveySession[]
+  users          AppUser[]
 }
 
 model SurveySession {
   id              String           @id @default(uuid())
   etsId           String?
+  appUserId       String?
   schoolYear      String?
   submittedAt     DateTime         @default(now())
+
   ets             Ets?             @relation(fields: [etsId], references: [id])
+  appUser         AppUser?         @relation(fields: [appUserId], references: [id])
+
   studentProfile  StudentProfile?
   closedResponses ClosedResponse[]
   openResponses   OpenResponse[]
@@ -36,6 +42,7 @@ model StudentProfile {
   firstExperience   Boolean?
   stageRole         String?
   informationSource String?
+
   surveySession     SurveySession @relation(fields: [surveySessionId], references: [id], onDelete: Cascade)
 }
 
@@ -45,6 +52,8 @@ model ClosedResponse {
   questionCode    String
   answerLabel     String
   numericValue    Int?
+  createdAt       DateTime      @default(now())
+
   surveySession   SurveySession @relation(fields: [surveySessionId], references: [id], onDelete: Cascade)
 
   @@unique([surveySessionId, questionCode])
@@ -55,6 +64,8 @@ model OpenResponse {
   surveySessionId String
   questionCode    String
   answerText      String
+  createdAt       DateTime      @default(now())
+
   surveySession   SurveySession @relation(fields: [surveySessionId], references: [id], onDelete: Cascade)
 
   @@unique([surveySessionId, questionCode])
@@ -65,7 +76,40 @@ model MultiResponse {
   surveySessionId String
   questionCode    String
   answerLabel     String
+  createdAt       DateTime      @default(now())
+
   surveySession   SurveySession @relation(fields: [surveySessionId], references: [id], onDelete: Cascade)
 
   @@unique([surveySessionId, questionCode, answerLabel])
+}
+
+model School {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  city      String?
+  createdAt DateTime  @default(now())
+
+  users     AppUser[]
+}
+
+model AppUser {
+  id             String          @id @default(uuid())
+  authUserId     String          @unique
+  email          String          @unique
+  fullName       String
+  role           UserRole
+  schoolId       String?
+  etsId          String?
+  createdAt      DateTime        @default(now())
+
+  school         School?         @relation(fields: [schoolId], references: [id])
+  ets            Ets?            @relation(fields: [etsId], references: [id])
+
+  surveySessions SurveySession[]
+}
+
+enum UserRole {
+  STUDENT
+  SCHOOL_REFERENT
+  ADMIN
 }
